@@ -7,7 +7,7 @@ import settings as s
 #enable console logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',level=logging.INFO)
 
-#initialize s3, transcribe server and comprehend clients
+#initialize s3, transcribe, translate and comprehend clients
 s3 = boto3.client('s3')
 transcribe = boto3.client('transcribe')
 comp = boto3.client('comprehend')
@@ -42,10 +42,10 @@ def select_bucket():
 
 #auxiliary function to select a file in an s3 bucket 
 def select_file(bucketname, ret):
-    #bucketname = select_bucket()
+    
     resp = s3.list_objects(Bucket = bucketname)    
 
-    if "Contents" in str(resp):    
+    if "Contents" in str(resp):     
         objects = [obj['Key'] for obj in resp['Contents']]
         i = 0
         for x in objects:
@@ -69,7 +69,7 @@ def select_file(bucketname, ret):
                     print("C'mon, it's just a number. I believe in you\n")
                 
             
-    else:
+    else: #bucket empty
         print("This is an empty bucket\n")
         return False
 
@@ -80,14 +80,14 @@ def convert(src):
     dst_format = dst.split(".")[1]
 
     src_ext = dst_format + "." + src #escamotage to pass the desired format of conversion to lambda function
-    #if dst_format == "mp3":
+    
     bucketname = s.TRIGGER #the s3 bucket with the trigger to lambda function
     s3.upload_file(src, bucketname, src_ext)
 
     converted = False
     name = src.split(".")[0] + "." + dst_format 
 
-    while converted != True:
+    while converted != True: #waits for the converted file to be uploaded to s.OUTPUT bucket by lambda
         resp = s3.list_objects(Bucket = s.OUTPUT)
         objects = [obj['Key'] for obj in resp['Contents']]
 
@@ -105,7 +105,7 @@ def convert(src):
 #transcribe an audio in text
 def gettext(filename):
     bucketname = s.TRANSCRIBE
-    upload(filename, bucketname)
+    upload(filename, bucketname) #transcribe too works alongside S3
     job_name = "job_name"
     job_uri = "s3://" + bucketname + "/" +filename
     check = transcribe.list_transcription_jobs()
@@ -117,7 +117,7 @@ def gettext(filename):
             pass
         
     print("There are several supported languages for this service: choose the one you need by typing the corrisponding number!\n"
-          "  1. English\n  2. Italian\n  3. French\n  4. Spanish\n  5. German\n")
+          "  1. English\n  2. Italian\n  3. French\n  4. Spanish\n  5. German\n") #language of the audio file
     lang = input()
     while True:
         if lang == "1":
@@ -140,14 +140,14 @@ def gettext(filename):
             lang = input()
             continue
             
-    transcribe.start_transcription_job(
+    transcribe.start_transcription_job( #initialize transcribe job
         TranscriptionJobName= job_name,
         Media={'MediaFileUri': job_uri},
         MediaFormat= filename.split(".")[1],
         LanguageCode = lcode
     )
 
-    while True:
+    while True: #waits for job to be completed
         status = transcribe.get_transcription_job(TranscriptionJobName=job_name)
         if status['TranscriptionJob']['TranscriptionJobStatus'] in ['COMPLETED', 'FAILED']:
             break
@@ -175,7 +175,7 @@ def gettext(filename):
     except BadRequestException:
         pass
 
-    print("Do you want to translate your text in another language? (Y/N)")
+    print("Do you want to translate your text in another language? (Y/N)")#option to translate the obtained text directly
     yn = input()
     if yn == ("y" or "Y"):
         gettranslation(text, lg)
@@ -246,7 +246,7 @@ def upload(filename, bucketname):
     s3.upload_file(filename, bucketname, filename)
     print("File uploaded! (" + filename +" in bucket " + bucketname + ")")
 
-#download a certain file
+#download a certain file from a bucket
 def download():
     print("Select the bucket from which you want to download stuff\n")
     bucketname = select_bucket()
@@ -271,7 +271,7 @@ def download():
                     yn = input()
                     continue
             s3.download_file(bucketname, filename, newname)
-            print("file " + filename + "downloaded as " + newname + "from " + bucketname)
+            print("file " + filename + " downloaded as " + newname + "from " + bucketname)
         elif filename == "-1":
             print("Ok, not a good time for downloads...")
         else:
@@ -279,7 +279,22 @@ def download():
     else:
         print("Ok, not a good time for downloads...")
 
-        
+#delete a certain file from a bucket
+def delete():
+    print("Select the bucket from which you want to delete stuff\n")
+    bucketname = select_bucket()
+    if bucketname != False:
+        print("Now select the file\n")
+        filename = select_file(bucketname, True)
+        if filename != False and filename != "-1":
+            s3.delete_object(Bucket = bucketname, Key= filename)
+            print("file " + filename + " deleted from " + bucketname)
+        elif filename == "-1":
+            print("Ok, nothing was deleted")
+        else:
+            print("Looks like everything was already deleted here...")
+    else:
+        print("Ok, nothing was deleted")        
     
 
 #read the content of a bucket
@@ -317,6 +332,8 @@ def main():
             read()
         elif sel == "download()":
             download()
+        elif sel == "delete()":
+            delete()
         elif sel == "upload()":
             print("Select a file to upload")
             file = input()
