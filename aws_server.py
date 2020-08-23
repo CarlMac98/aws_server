@@ -143,7 +143,7 @@ def gettext(filename):
     transcribe.start_transcription_job(
         TranscriptionJobName= job_name,
         Media={'MediaFileUri': job_uri},
-        MediaFormat='mp3',
+        MediaFormat= filename.split(".")[1],
         LanguageCode = lcode
     )
 
@@ -183,7 +183,32 @@ def gettext(filename):
         print("Ok then! My job here is done")
 
 #translate a text in another language
-def gettranslation(text, lg):
+def gettranslation(text):
+    print("\nWhich is the language of the text?\n"
+          "  1. English\n  2. Italian\n  3. French\n  4. Spanish\n  5. German\n")
+    lang = input()
+    while True:
+        if lang == "1":
+            lg = 'en'
+            break
+        elif lang == "2":
+            lg = 'it'
+            break
+        elif lang == "3":
+            lg = 'fr'
+            break
+        elif lang == "4":
+            lg = 'es'
+            break
+        elif lang == "5":
+            lg = 'de'
+            break
+        else:
+            print("C'mon, it's just a number. I believe in you\n")
+            lang = input()
+            continue
+
+    
     print("\nIn which language do you want to translate it?\n"
           "  1. English\n  2. Italian\n  3. French\n  4. Spanish\n  5. German\n")
     lang = input()
@@ -218,12 +243,8 @@ def gettranslation(text, lg):
 
 #upload a file to an s3 bucket
 def upload(filename, bucketname):
-    if bucketname == s.TRIGGER or s.TRANSCRIBE:
-        print("Permission denied to upload here")
-
-    else:
-        s3.upload_file(filename, bucketname, filename)
-        print("File uploaded! (" + filename +" in bucket " + bucketname + ")")
+    s3.upload_file(filename, bucketname, filename)
+    print("File uploaded! (" + filename +" in bucket " + bucketname + ")")
 
 #download a certain file
 def download():
@@ -301,21 +322,49 @@ def main():
             file = input()
             print("Now select a Bucket")
             bck = select_bucket()
-            upload(file, bck)
+            while True:
+                if bck == s.TRIGGER or s.TRANSCRIBE:
+                    print("Permission denied to upload here")
+                else:
+                    upload(file, bck)
+                    break                
         elif sel == "convert()":
             print("Select a file to convert")
             file = input()
             convert(file)
         elif sel == "gettext()":
             print("Select a file to transcribe")
-            file = input()
-            gettext(file)
+            while True:
+                file = input()
+                if file.split(".")[1] in {"flac", "mp3", "wav", "mp4"}:
+                    gettext(file)
+                    break
+                else:
+                    print("This format is not supported; choose a file in one of the following:\n"
+                          "-mp3\n-mp4\n-wav\n-flac\n")
+            
         elif sel == "translate()":
-            print("Select a file to translate")
-            file = input()
-            print("Now type in the language of the audio")
-            lang = input()
-            gettranslation(file, lang)
+            print("Trascribe from file? (Y/N)")
+            yn = input()
+            while True:
+                if yn == ("y" or "Y"):
+                    print("Select a file to translate")
+                    file = input()
+                    text = open(file, "r")
+                    tx = text.read()
+                    gettranslation(tx)
+                    text.close()
+                    break
+                elif yn == ("n" or "N"):
+                    print("Then write the text to convert")
+                    text = input()
+                    gettranslation(text)
+                    break
+                else:
+                    print("Invalid input; type 'Y' or 'N'\n")
+                    yn = input()
+                    
+            
         elif sel == "exit()":
             exit()
         else:
